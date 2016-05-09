@@ -31,10 +31,7 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 			Procs:     []string{".*"}, // Collect all processes.
 		},
 	}
-	err := m.stats.InitProcStats()
-	if err != nil {
-		return nil, err
-	}
+	m.stats.InitProcStats()
 	return m, nil
 }
 

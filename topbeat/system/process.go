@@ -28,16 +28,31 @@ type Process struct {
 type ProcStats struct {
 	ProcStats bool
 	Procs     []string
-	regexps   []*regexp.Regexp
 	ProcsMap  ProcsMap
 }
 
-// newProcess creates a new Process object based on the state information.
-func newProcess(pid int) (*Process, error) {
-
+func GetProcess(pid int, cmdline string) (*Process, error) {
 	state := sigar.ProcState{}
 	if err := state.Get(pid); err != nil {
 		return nil, fmt.Errorf("error getting process state for pid=%d: %v", pid, err)
+	}
+
+	mem := sigar.ProcMem{}
+	if err := mem.Get(pid); err != nil {
+		return nil, fmt.Errorf("error getting process mem for pid=%d: %v", pid, err)
+	}
+
+	cpu := sigar.ProcTime{}
+	if err := cpu.Get(pid); err != nil {
+		return nil, fmt.Errorf("error getting process cpu time for pid=%d: %v", pid, err)
+	}
+
+	if cmdline == "" {
+		args := sigar.ProcArgs{}
+		if err := args.Get(pid); err != nil {
+			return nil, fmt.Errorf("error getting process arguments for pid=%d: %v", pid, err)
+		}
+		cmdline = strings.Join(args.List, " ")
 	}
 
 	proc := Process{
@@ -46,36 +61,13 @@ func newProcess(pid int) (*Process, error) {
 		Name:     state.Name,
 		State:    getProcState(byte(state.State)),
 		Username: state.Username,
+		CmdLine:  cmdline,
+		Mem:      mem,
+		Cpu:      cpu,
 		Ctime:    time.Now(),
 	}
 
 	return &proc, nil
-}
-
-// getDetails fills in CPU, memory, and command line details for the process
-func (proc *Process) getDetails(cmdline string) error {
-
-	proc.Mem = sigar.ProcMem{}
-	if err := proc.Mem.Get(proc.Pid); err != nil {
-		return fmt.Errorf("error getting process mem for pid=%d: %v", proc.Pid, err)
-	}
-
-	proc.Cpu = sigar.ProcTime{}
-	if err := proc.Cpu.Get(proc.Pid); err != nil {
-		return fmt.Errorf("error getting process cpu time for pid=%d: %v", proc.Pid, err)
-	}
-
-	if cmdline == "" {
-		args := sigar.ProcArgs{}
-		if err := args.Get(proc.Pid); err != nil {
-			return fmt.Errorf("error getting process arguments for pid=%d: %v", proc.Pid, err)
-		}
-		proc.CmdLine = strings.Join(args.List, " ")
-	} else {
-		proc.CmdLine = cmdline
-	}
-
-	return nil
 }
 
 func GetProcMemPercentage(proc *Process, total_phymem uint64) float64 {
@@ -167,29 +159,21 @@ func GetProcCpuPercentage(last *Process, current *Process) float64 {
 
 func (procStats *ProcStats) MatchProcess(name string) bool {
 
-	for _, reg := range procStats.regexps {
-		if reg.MatchString(name) {
+	for _, reg := range procStats.Procs {
+		matched, _ := regexp.MatchString(reg, name)
+		if matched {
 			return true
 		}
 	}
 	return false
 }
 
-func (procStats *ProcStats) InitProcStats() error {
+func (procStats *ProcStats) InitProcStats() {
 
 	procStats.ProcsMap = make(ProcsMap)
 
 	if len(procStats.Procs) == 0 {
-		return nil
-	}
-
-	procStats.regexps = []*regexp.Regexp{}
-	for _, pattern := range procStats.Procs {
-		reg, err := regexp.Compile(pattern)
-		if err != nil {
-			return fmt.Errorf("Failed to compile regexp [%s]: %v", pattern, err)
-		}
-		procStats.regexps = append(procStats.regexps, reg)
+		return
 	}
 
 	pids, err := Pids()
@@ -198,20 +182,13 @@ func (procStats *ProcStats) InitProcStats() error {
 	}
 
 	for _, pid := range pids {
-		process, err := newProcess(pid)
+		process, err := GetProcess(pid, "")
 		if err != nil {
 			logp.Debug("topbeat", "Skip process pid=%d: %v", pid, err)
 			continue
 		}
-		err = process.getDetails("")
-		if err != nil {
-			logp.Err("Error getting process details pid=%d: %v", pid, err)
-			continue
-		}
 		procStats.ProcsMap[process.Pid] = process
 	}
-
-	return nil
 }
 
 func (procStats *ProcStats) GetProcStats() ([]common.MapStr, error) {
@@ -235,22 +212,20 @@ func (procStats *ProcStats) GetProcStats() ([]common.MapStr, error) {
 			cmdline = previousProc.CmdLine
 		}
 
-		process, err := newProcess(pid)
+		process, err := GetProcess(pid, cmdline)
 		if err != nil {
 			logp.Debug("topbeat", "Skip process pid=%d: %v", pid, err)
 			continue
 		}
 
 		if procStats.MatchProcess(process.Name) {
-			err = process.getDetails(cmdline)
-			if err != nil {
-				logp.Err("Error getting process details. pid=%d: %v", process.Pid, err)
-				continue
-			}
 
 			newProcs[process.Pid] = process
 
-			last, _ := procStats.ProcsMap[process.Pid]
+			last, ok := procStats.ProcsMap[process.Pid]
+			if ok {
+				procStats.ProcsMap[process.Pid] = process
+			}
 			proc := GetProcessEvent(process, last)
 
 			processes = append(processes, proc)

@@ -27,12 +27,11 @@ func TestGetProcess(t *testing.T) {
 
 	for _, pid := range pids {
 
-		process, err := newProcess(pid)
+		process, err := GetProcess(pid, "")
+
 		if err != nil {
 			continue
 		}
-		err = process.getDetails("")
-		assert.NoError(t, err)
 		assert.NotNil(t, process)
 
 		assert.True(t, (process.Pid > 0))
@@ -74,20 +73,13 @@ func TestMatchProcs(t *testing.T) {
 	var procStats = ProcStats{}
 
 	procStats.Procs = []string{".*"}
-	err := procStats.InitProcStats()
-	assert.NoError(t, err)
-
 	assert.True(t, procStats.MatchProcess("topbeat"))
 
 	procStats.Procs = []string{"topbeat"}
-	err = procStats.InitProcStats()
-	assert.NoError(t, err)
 	assert.False(t, procStats.MatchProcess("burn"))
 
 	// match no processes
 	procStats.Procs = []string{"$^"}
-	err = procStats.InitProcStats()
-	assert.NoError(t, err)
 	assert.False(t, procStats.MatchProcess("burn"))
 }
 
@@ -162,12 +154,10 @@ func BenchmarkGetProcess(b *testing.B) {
 			cmdline = p.CmdLine
 		}
 
-		process, err := newProcess(pid)
+		process, err := GetProcess(pid, cmdline)
 		if err != nil {
 			continue
 		}
-		err = process.getDetails(cmdline)
-		assert.NoError(b, err)
 
 		procs[pid] = process
 	}
