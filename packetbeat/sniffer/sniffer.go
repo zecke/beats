@@ -25,6 +25,9 @@ type SnifferSetup struct {
 	isAlive        bool
 	dumper         *pcap.Dumper
 
+	// moiji-mobile pcap zeromq interface
+	pcapSubscriber	*PcapSubscriber
+
 	// bpf filter
 	filter string
 
@@ -34,7 +37,7 @@ type SnifferSetup struct {
 }
 
 type Worker interface {
-	OnPacket(data []byte, ci *gopacket.CaptureInfo)
+	OnPacket(linkType *layers.LinkType, data []byte, ci *gopacket.CaptureInfo)
 }
 
 type WorkerFactory func(layers.LinkType) (Worker, string, error)
@@ -209,6 +212,14 @@ func (sniffer *SnifferSetup) setFromConfig(config *config.InterfacesConfig) erro
 
 		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pfringHandle)
 
+	case "pcapserver":
+		sniffer.pcapSubscriber, err = NewPcapServerSubscriber(
+						sniffer.config.Device,
+						sniffer.config.Subscription)
+		if err != nil {
+			return err
+		}
+		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapSubscriber)
 	default:
 		return fmt.Errorf("Unknown sniffer type: %s", sniffer.config.Type)
 	}
@@ -237,6 +248,10 @@ func (sniffer *SnifferSetup) Reopen() error {
 func (sniffer *SnifferSetup) Datalink() layers.LinkType {
 	if sniffer.config.Type == "pcap" {
 		return sniffer.pcapHandle.LinkType()
+	}
+	if sniffer.config.Type == "pcapserver" {
+		// begin with a dummy one
+		return layers.LinkTypeEthernet
 	}
 	return layers.LinkTypeEthernet
 }
@@ -286,6 +301,11 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
+
+		var linkType *layers.LinkType
+		if sniffer.pcapSubscriber != nil {
+			linkType = sniffer.pcapSubscriber.LastLinkType()
+		}
 
 		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
 			logp.Debug("sniffer", "Interrupted")
@@ -347,7 +367,7 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 		logp.Debug("sniffer", "Packet number: %d", counter)
 
-		sniffer.worker.OnPacket(data, &ci)
+		sniffer.worker.OnPacket(linkType, data, &ci)
 	}
 
 	logp.Info("Input finish. Processed %d packets. Have a nice day!", counter)
@@ -367,6 +387,8 @@ func (sniffer *SnifferSetup) Close() error {
 		sniffer.afpacketHandle.Close()
 	case "pfring", "pf_ring":
 		sniffer.pfringHandle.Close()
+	case "pcapserver":
+		sniffer.pcapSubscriber.Close()
 	}
 	return nil
 }

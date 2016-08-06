@@ -101,6 +101,8 @@ Packetbeat supports three sniffer types:
  * `pf_ring`, which makes use of an ntop.org
    http://www.ntop.org/products/pf_ring/[project]. This setting provides the best
    sniffing speed, but it requires a kernel module, and it's Linux-specific.
+ * `pcapserver`, which connects to a
+   http://github.com/moiji-mobile/pcap-client-server[moiji-mobile pcap storage server].
 
 The default sniffer type is `pcap`.
 
@@ -168,6 +170,13 @@ packetbeat.interfaces.bpf_filter: "net 192.168.238.0/0 and port 80 and port 3306
 NOTE: This setting disables automatic generation of the BPF filter. If
 you use this setting, it's your responsibility to keep the BPF filters in sync with the
 ports defined in the `protocols` section.
+
+
+===== subscription
+
+Used by the pcapserver code to select which messages of the publisher to subscriber.
+By default data.v1 will be used but it allows by selecting the prefix of a client or
+a set of clients.
 
 
 [[configuration-flows]]

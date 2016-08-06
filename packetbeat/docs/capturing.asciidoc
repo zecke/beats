@@ -25,6 +25,8 @@ Currently Packetbeat has several options for traffic capturing:
  * `pf_ring`, which makes use of an ntop.org
    http://www.ntop.org/products/pf_ring/[project]. This setting provides the best 
    sniffing speed, but it requires a kernel module, and it's Linux-specific.
+ * `pcapserver`, which connects to a
+   http://github.com/moiji-mobile/pcap-client-server[moiji-mobile pcap storage server].
 
 The `pf_ring` option is a good configuration to use when you have
 dedicated servers for Packetbeat. It provides sniffing speeds in the order of

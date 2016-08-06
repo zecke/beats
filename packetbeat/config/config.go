@@ -28,6 +28,7 @@ type InterfacesConfig struct {
 	Dumpfile       string
 	OneAtATime     bool
 	Loop           int
+	Subscription   string
 }
 
 type Flows struct {

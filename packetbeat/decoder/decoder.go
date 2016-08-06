@@ -54,6 +54,24 @@ const (
 	netBytesTotalCounter   = "net_bytes_total"
 )
 
+func (d *DecoderStruct) updateDataLink(datalink layers.LinkType) error {
+	switch datalink {
+	case layers.LinkTypeLinuxSLL:
+		d.linkLayerDecoder = &d.sll
+		d.linkLayerType = layers.LayerTypeLinuxSLL
+	case layers.LinkTypeEthernet:
+		d.linkLayerDecoder = &d.eth
+		d.linkLayerType = layers.LayerTypeEthernet
+	case layers.LinkTypeNull: // loopback on OSx
+		d.linkLayerDecoder = &d.lo
+		d.linkLayerType = layers.LayerTypeLoopback
+	default:
+		return fmt.Errorf("Unsupported link type: %s", datalink.String())
+	}
+
+	return nil
+}
+
 // Creates and returns a new DecoderStruct.
 func NewDecoder(
 	f *flows.Flows,
@@ -97,18 +115,9 @@ func NewDecoder(
 
 	debugf("Layer type: %s", datalink.String())
 
-	switch datalink {
-	case layers.LinkTypeLinuxSLL:
-		d.linkLayerDecoder = &d.sll
-		d.linkLayerType = layers.LayerTypeLinuxSLL
-	case layers.LinkTypeEthernet:
-		d.linkLayerDecoder = &d.eth
-		d.linkLayerType = layers.LayerTypeEthernet
-	case layers.LinkTypeNull: // loopback on OSx
-		d.linkLayerDecoder = &d.lo
-		d.linkLayerType = layers.LayerTypeLoopback
-	default:
-		return nil, fmt.Errorf("Unsupported link type: %s", datalink.String())
+	err := d.updateDataLink(datalink)
+	if err != nil {
+		return nil, err
 	}
 
 	return &d, nil
@@ -130,10 +139,18 @@ func (d *DecoderStruct) AddLayers(layers []gopacket.DecodingLayer) {
 	}
 }
 
-func (d *DecoderStruct) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
+func (d *DecoderStruct) OnPacket(datalink *layers.LinkType, data []byte, ci *gopacket.CaptureInfo) {
 	defer logp.Recover("packet decoding failed")
 
 	d.truncated = false
+
+	if datalink != nil {
+		err := d.updateDataLink(*datalink)
+		if err != nil {
+			logp.Err("Updating data link failed: %v", err)
+			return
+		}
+	}
 
 	current := d.linkLayerDecoder
 	currentType := d.linkLayerType
