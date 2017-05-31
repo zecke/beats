@@ -282,3 +282,7 @@ func (pb *packetbeat) icmpConfig() (*common.Config, error) {
 
 	return icmp, nil
 }
+
+func (pb *packetbeat) Config() interface{} {
+	return pb.config
+}

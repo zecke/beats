@@ -60,6 +60,7 @@ import (
 	svc "github.com/elastic/beats/libbeat/service"
 	"github.com/elastic/beats/libbeat/template"
 	"github.com/elastic/beats/libbeat/version"
+	"github.com/go-yaml/yaml"
 
 	// Register default processors.
 	_ "github.com/elastic/beats/libbeat/processors/actions"
@@ -90,6 +91,13 @@ type Beater interface {
 	// Stop is invoked to signal that the Run method should finish its execution.
 	// It will be invoked at most once.
 	Stop()
+}
+
+// Additional interface to provide introspection. E.g. for system tests
+// or other forms of runtime introspection
+type BeaterIntrospection interface {
+	// Provide the internal Config structure
+	Config() interface{}
 }
 
 // Creator initializes and configures a new Beater instance used to execute
@@ -244,6 +252,15 @@ func (b *Beat) launch(bt Creator) error {
 			return err
 		}
 		defer reporter.Stop()
+	}
+
+	// Provide yaml presentation of what was parsed
+	if cfgfile.DumpConfig() {
+		if val, ok := beater.(BeaterIntrospection); ok {
+			dat, _ := yaml.Marshal(val.Config())
+			fmt.Print(string(dat))
+		}
+		return GracefulExit
 	}
 
 	// If -configtest was specified, exit now prior to run.

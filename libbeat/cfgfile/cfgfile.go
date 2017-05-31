@@ -18,6 +18,7 @@ var (
 	configfiles = flagArgList("c", "beat.yml", "Configuration file, relative to path.config")
 	overwrites  = common.NewFlagConfig(nil, nil, "E", "Configuration overwrite")
 	testConfig  = flag.Bool("configtest", false, "Test configuration and exit.")
+	dumpConfig  = flag.Bool("dumpconfig", false, "Dump parsed configuration.")
 
 	// Additional default settings, that must be available for variable expansion
 	defaults = mustNewConfigFrom(map[string]interface{}{
@@ -170,4 +171,9 @@ func GetPathConfig() string {
 // IsTestConfig returns whether or not this is configuration used for testing
 func IsTestConfig() bool {
 	return *testConfig
+}
+
+// DumpConfig returns where or not to print the parsed configuration
+func DumpConfig() bool {
+	return *dumpConfig
 }
